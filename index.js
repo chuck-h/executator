@@ -46,8 +46,6 @@ fastify.get('/invoice', async (request, reply) => {
         }
     }]
 
-    console.log("actions: "+JSON.stringify(actions, null, 2))
-
     const esr = await buildTransaction(actions)
 
     const qr = await buildQrCode(esr)
