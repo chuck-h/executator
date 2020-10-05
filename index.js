@@ -1,9 +1,15 @@
 const fastify = require('fastify')({ logger: true })
 fastify.register(require("fastify-blipp"));
+const path = require('path')
 
 const buildTransaction = require('./buildTransaction')
 const buildQrCode = require('./buildQrCode')
 
+fastify.register(require('fastify-static'), {
+    root: path.join(__dirname, 'images'),
+    prefix: '/images/', // optional: default '/'
+  })
+  
 fastify.post('/qr', async (request, reply) => {
     const actions = request.body.actions
 

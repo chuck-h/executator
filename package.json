@@ -11,6 +11,7 @@
     "eosio-signing-request": "^1.2.0",
     "fastify": "^3.5.0",
     "fastify-blipp": "^3.0.0",
+    "fastify-static": "^3.2.1",
     "md5": "^2.3.0",
     "node-fetch": "^2.6.1",
     "qrcode": "^1.4.4"
