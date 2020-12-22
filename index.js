@@ -36,10 +36,13 @@ fastify.get('/invoice', async (request, reply) => {
         throw Error("memo needs to be defined")
     }
 
-    var quantity = parseFloat(request.query.quantity).toFixed(4) + " SEEDS"
+    let tokenContract = request.query.tokenContract || "token.seeds"
+    let digits = request.query.digitsPrecision || 4
+    let symbol = request.query.tokenSymbol || "SEEDS"
+    var quantity = parseFloat(request.query.quantity).toFixed(digits) + " " + symbol
 
     const actions = [{
-        account: "token.seeds",
+        account: tokenContract,
         name: "transfer",
         authorization: [{
             actor:"............1",
