@@ -68,6 +68,46 @@ fastify.get('/invoice', async (request, reply) => {
     }
 })
 
+fastify.get('/buyseeds', async (request, reply) => {
+
+    if (!request.query.quantity) {
+        throw Error("quantity needs to be defined")
+    }
+    
+    let to = "tlosto.seeds"
+    let memo = request.query.memo || ""
+    let tokenContract = "husd.hypha"
+    let digits = 2
+    let symbol = "HUSD"
+    var quantity = parseFloat(request.query.quantity).toFixed(digits) + " " + symbol
+
+    const actions = [{
+        account: tokenContract,
+        name: "transfer",
+        authorization: [{
+            actor:"............1",
+            permission: "............2"
+        }
+        ],
+        data: {
+            from:"............1",
+            "to": to,
+            "quantity": quantity,
+            memo: memo
+        }
+    }]
+
+    const esr = await buildTransaction(actions)
+
+    const qrPath = await buildQrCode(esr)
+    
+    const qr = "https://" + request.hostname + "/" + qrPath
+
+    return {
+        esr, qr
+    }
+})
+
 const start = async () => {
     try {
         await fastify.listen(3000) 
