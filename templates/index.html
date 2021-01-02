@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head></head>
+  <body>
+    <form action="/buy-seeds" method="GET">
+        <input type="number" name="quantity" placeholder="Quantity" />
+        <input type="submit" value="Generate QR" />
+    </form>
+    <p>{{ quantity }}</p>
+    <img src="{{ qr }}" />
+    <br/>
+  </body>
+</html>
