@@ -2,7 +2,7 @@ const fastify = require('fastify')({ logger: true })
 fastify.register(require("fastify-blipp"));
 const path = require('path')
 
-const buildTransaction = require('./buildTransaction')
+const { buildTransaction, setNode } = require('./buildTransaction')
 const buildQrCode = require('./buildQrCode')
 const buildHusdAction = require('./buildHusdAction')
 
