@@ -4,34 +4,45 @@ const fetch = require('node-fetch')
 const util = require('util')
 const zlib = require('zlib')
 
+const { SigningRequest } = require("eosio-signing-request")
+
 const textEncoder = new util.TextEncoder()
 const textDecoder = new util.TextDecoder()
 
-const rpc = new JsonRpc('https://node.hypha.earth', {
-    fetch
-})
+var rpc
+var eos
+var opts
 
-const eos = new Api({
-    rpc,
-    textDecoder,
-    textEncoder,
-})
+const default_node = 'https://node.hypha.earth'
 
-const { SigningRequest } = require("eosio-signing-request")
+function setNode(node) {
+    rpc = new JsonRpc(node, {
+        fetch
+    })
 
-const opts = {
-    textEncoder,
-    textDecoder,
-    zlib: {
-        deflateRaw: (data) => new Uint8Array(zlib.deflateRawSync(Buffer.from(data))),
-        inflateRaw: (data) => new Uint8Array(zlib.inflateRawSync(Buffer.from(data))),
-    },
-    abiProvider: {
-        getAbi: async (account) => (await eos.getAbi(account))
-    }
+    eos = new Api({
+        rpc,
+        textDecoder,
+        textEncoder,
+    })
+
+    opts = {
+        textEncoder,
+        textDecoder,
+        zlib: {
+            deflateRaw: (data) => new Uint8Array(zlib.deflateRawSync(Buffer.from(data))),
+            inflateRaw: (data) => new Uint8Array(zlib.inflateRawSync(Buffer.from(data))),
+        },
+        abiProvider: {
+            getAbi: async (account) => (await eos.getAbi(account))
+        }
+    } 
 }
 
 async function buildTransaction(actions) {
+    if (typeof(rpc) == 'undefined') {
+        setNode(default_node)
+    }
     const info = await rpc.get_info();
     const head_block = await rpc.get_block(info.last_irreversible_block_num);
     const chainId = info.chain_id;
@@ -54,4 +65,4 @@ async function buildTransaction(actions) {
     return uri
 }
 
-module.exports = buildTransaction
+module.exports = { buildTransaction, setNode }
