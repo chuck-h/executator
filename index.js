@@ -68,7 +68,7 @@ fastify.get('/buyseeds', async (request, reply) => {
 fastify.post('/qr', async (request, reply) => {
     const actions = request.body.actions
 
-    setNode('https://node.hypha.earth')
+    setNode('https://mainnet.telos.net')
     
     const esr = await buildTransaction(actions)
 
