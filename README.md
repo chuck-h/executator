@@ -15,12 +15,21 @@ QR code is then just a repr
 ```
 mkdir images
 npm install
+```
+In a PM2 environment
+```
+pm2 start index.js
+```
+Alternatively (?)
+```
 npm run start
 ```
 
 ## API
 
-```/qr```
+```/qr``` for telos mainnet
+```/qrt``` for telos testnet
+
 
 send 'actions' json in the body to get the QR code
 
