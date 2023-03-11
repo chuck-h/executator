@@ -97,6 +97,22 @@ fastify.post('/qrt', async (request, reply) => {
     }
 })
 
+fastify.post('/qrp', async (request, reply) => {
+    const actions = request.body.actions
+    
+    setNode('https://proton.protonuk.io')
+    
+    const esr = await buildTransaction(actions)
+
+    const qrPath = await buildQrCode(esr)
+    
+    const qr = "https://" + request.hostname + "/" + qrPath
+
+    return {
+        esr, qr
+    }
+})
+
 fastify.get('/invoice', async (request, reply) => {
 
     if (!request.query.to) {
