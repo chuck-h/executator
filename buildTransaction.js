@@ -13,8 +13,6 @@ var rpc
 var eos
 var opts
 
-const default_node = 'https://mainnet.telos.net'
-
 function setNode(node) {
     rpc = new JsonRpc(node, {
         fetch
@@ -41,7 +39,7 @@ function setNode(node) {
 
 async function buildTransaction(actions) {
     if (typeof(rpc) == 'undefined') {
-        setNode(default_node)
+        return null;
     }
     const info = await rpc.get_info();
     const head_block = await rpc.get_block(info.last_irreversible_block_num);
@@ -65,4 +63,8 @@ async function buildTransaction(actions) {
     return uri
 }
 
-module.exports = { buildTransaction, setNode }
+function get_rpc() {
+  return rpc;
+}
+
+module.exports = { buildTransaction, setNode, get_rpc }
