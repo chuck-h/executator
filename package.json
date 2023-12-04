@@ -8,6 +8,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "csv-string": "^4.1.1",
     "eosio-signing-request": "^1.2.0",
     "fastify": "^3.5.0",
     "fastify-blipp": "^3.0.0",

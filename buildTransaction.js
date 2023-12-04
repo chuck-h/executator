@@ -1,4 +1,5 @@
 const { JsonRpc, Api, Serialize } = require('eosjs')
+const { JsSignatureProvider } = require('eosjs/dist/eosjs-jssig')
 
 const fetch = require('node-fetch')
 const util = require('util')
@@ -13,13 +14,27 @@ var rpc
 var eos
 var opts
 
+var keyProvider = []
+function setKeyProvider(kp) {
+    keyProvider = kp
+    const signatureProvider = new JsSignatureProvider(keyProvider)
+    eos = new Api({
+        rpc,
+        signatureProvider,
+        textDecoder,
+        textEncoder,
+    })
+}
+  
 function setNode(node) {
     rpc = new JsonRpc(node, {
         fetch
     })
 
+    const signatureProvider = new JsSignatureProvider(keyProvider)
     eos = new Api({
         rpc,
+        signatureProvider,
         textDecoder,
         textEncoder,
     })
@@ -63,8 +78,25 @@ async function buildTransaction(actions) {
     return uri
 }
 
-function get_rpc() {
+async function sendTransactionWith(actions, keys) {
+    const signatureProvider = new JsSignatureProvider(keys)
+    eos = new Api({
+        rpc,
+        signatureProvider,
+        textDecoder,
+        textEncoder,
+    })
+    return await eos.transact(
+        {actions: actions},
+        {
+            blocksBehind: 3,
+            expireSeconds: 30,
+        }
+    )
+}
+
+function getRpc() {
   return rpc;
 }
 
-module.exports = { buildTransaction, setNode, get_rpc }
+module.exports = { buildTransaction, setNode, getRpc, setKeyProvider, sendTransactionWith }
