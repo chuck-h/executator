@@ -1,7 +1,7 @@
 const fastify = require('fastify')({ logger: true })
 fastify.register(require("fastify-blipp"));
 const path = require('path')
-const ecc = require('eosjs-ecc')
+const {ecc, key_utils, PrivateKey} = require('eosjs-ecc')
 const CSV = require('csv-string')
 
 const { buildTransaction, setNode, getRpc, sendTransactionWith } = require('./buildTransaction')
@@ -14,19 +14,25 @@ fastify.register(require('fastify-static'), {
 
 fastify.post('/qr', async (request, reply) => {
     const actions = request.body.actions
-
     setNode(request.body.endpoint ?? 'https://mainnet.telos.net')
-    
     const esr = await buildTransaction(actions)
-
     const qrPath = await buildQrCode(esr)
-    
     const qr = "https://" + request.hostname + "/" + qrPath
-
     return {
         esr, qr
     }
 })
+
+// We obfuscate task.private_key object property
+// 1. at startup, generate obfuscator as 32 random byte Buffer (key_utils.random32ByteBuffer())
+// 2. when task.private_key is generated, get it as random32ByteBuffer
+// 3. xor with obfuscator before saving to task.private_key
+// 4. when private key is needed to generate public key or sign,
+//     xor with obfuscator to get plaintext, then use PrivateKey(Buffer).toString() for wif
+// TODO: consider refreshing obfuscator any time task_list is empty
+
+var obfuscator;
+
 
 var task_list = [];
 const default_task_lifetime_sec = 60;
@@ -37,34 +43,53 @@ fastify.post('/maketask', async (request, reply) => {
     setNode(request.body.endpoint ?? 'https://mainnet.telos.net');
     rpc = getRpc();
     // convert csv (if present) to list of transaction objects
+    // TODO refactor convert_csv as function
     var trx_list = [];
     if (request.body.trx_csv) {
       var parsed = CSV.parse(request.body.trx_csv);
       console.log(`parsed CSV: ${JSON.stringify(parsed)}`);
-      const headers = parsed[0];
-      if (headers[0]!="contract" || headers[1]!="action") {
-        console.log(`first columns should be [contract, action]`);
+      var headers = parsed[0];
+      // ignore columns left of contract, action headers
+      var first_column = 0;
+      for (; first_column < headers.length-1; ++first_column) {
+        if (headers[first_column] == "contract" &&
+            headers[first_column+1] == "action" ) {
+          break;
+        }
+      }
+      if (first_column == headers.length-1) {
+        console.log(`could not find [contract, action] columns`);
       } else {
-        parsed.slice(1).forEach( (row) => {
+        headers = headers.slice(first_column);
+        for (full_row of parsed.slice(1)) {
+          const row = full_row.slice(first_column);
           var trx = {};
+          if (row[0].length == 0) {
+            trx = null;
+            continue; // skip line if contract is blank
+          }
           trx.account = row[0];
           trx.name = row[1];
           trx.data = {};
           for (var i = 2; i < row.length; ++i) {
             const field = row[i];
             const header = headers[i];
-            if (field.length == 0) {
+            if (field.length == 0 || header.length == 0) {
               continue;
             }
             trx.data[header] = field;
           }
-        trx_list.push({trx: {actions: [trx]}});
-        })
+          if (trx) {
+            trx_list.push({trx: {actions: [trx]}});
+          }
+        }
       }
     }  
     var task = {};
-    task.private_key = await ecc.randomKey(); // note: no enclave here
-    task.public_key = ecc.privateToPublic(task.private_key);
+    await key_utils.addEntropy(...key_utils.cpuEntropy())
+    task.private_key = (await key_utils.random32ByteBuffer()).map((b,i) => b ^ obfuscator[i]);
+    task.public_key = PrivateKey.fromBuffer(task.private_key.map((b,i) => b ^ obfuscator[i]))
+      .toPublic().toString();
     task.account = request.body.account;
     task.permission = request.body.permission;
     var nude_trx_list = request.body.trx_list ?? trx_list;
@@ -167,7 +192,8 @@ async function poll_tasks() {
           console.log(`processing trx: ${esr}`);
           
           // Sign transaction with task.private_key & publish
-          const result = await sendTransactionWith(actions, [task.private_key]);
+          const result = await sendTransactionWith(actions,
+            [PrivateKey.fromBuffer(task.private_key.map((b,i) => b ^ obfuscator[i])).toString()]);
           console.log(JSON.stringify(result));
           if (result.processed.error != null) {
             task.failed_trx++;
@@ -213,7 +239,8 @@ async function poll_tasks() {
           console.log(`removing key: ${esr}`);
     
           // sign & publish transaction with task.private_key 
-          const result = await sendTransactionWith(actions, [task.private_key]);
+          const result = await sendTransactionWith(actions,
+            [PrivateKey.fromBuffer(task.private_key.map((b,i) => b ^ obfuscator[i])).toString()]);
           console.log(JSON.stringify(result));
           if (result.processed.error != null) {
             console.log(`while removing ephemeral key authority: ${
@@ -233,6 +260,8 @@ async function poll_tasks() {
          
 const start = async () => {
     try {
+        await PrivateKey.initialize()
+        obfuscator = await key_utils.random32ByteBuffer()
         await Promise.all([
             fastify.listen(3000),
             poll_tasks()
