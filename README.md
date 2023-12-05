@@ -14,6 +14,9 @@ After completing the task, the service publishes a transaction to the chain whic
 A sequence of single-action transactions can be expressed as a csv file (spreadsheet format)
 ![image](https://github.com/chuck-h/executator/assets/2141014/998ad129-df29-4a08-a9ff-72ed8207711c)
 
+A corresponding 4-step execution history (updateauth, script line 1, script line 2, updateauth), last tx at top:
+![image](https://github.com/chuck-h/executator/assets/2141014/663a236f-6a79-4d3b-87f7-3df195c23ca9)
+
 ## Installation
 
 ```
