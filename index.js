@@ -36,7 +36,7 @@ fastify.post('/maketask', async (request, reply) => {
     // TODO: validate input
     setNode(request.body.endpoint ?? 'https://mainnet.telos.net');
     rpc = getRpc();
-    // convert csv if present
+    // convert csv (if present) to list of transaction objects
     var trx_list = [];
     if (request.body.trx_csv) {
       var parsed = CSV.parse(request.body.trx_csv);
@@ -112,7 +112,9 @@ fastify.post('/maketask', async (request, reply) => {
     // test
     const esr = await buildTransaction(actions);
     console.log(esr);
-    
+
+    // TODO build a recovery transaction here and display esr
+    //  (This will remove the ephemeral auth in case service fails)    
     return actions;
 })
 

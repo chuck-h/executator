@@ -52,6 +52,9 @@ function setNode(node) {
     } 
 }
 
+// TODO make a buildActionList which uses the list-of-actions esr form
+//  This will make a non-expiring esr/QR code
+
 async function buildTransaction(actions) {
     if (typeof(rpc) == 'undefined') {
         return null;
