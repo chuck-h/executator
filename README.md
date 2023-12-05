@@ -27,7 +27,7 @@ In a PM2 environment
 ```
 pm2 start index.js
 ```
-Alternatively (?)
+Alternatively
 ```
 npm run start
 ```
@@ -36,7 +36,7 @@ npm run start
 
 ### ```/maketask``` 
 
-send contract/permission and transaction list; returns action to install ephemeral key and start task, e.g.
+send account/permission and transaction list; returns action to install ephemeral key and start task, e.g.
 <code>
 curl -X 'POST'   'http://127.0.0.1:3000/maketask'   -H 'accept: application/json'   -H 'Content-Type: application/json'   -d '{"account":"chuckseattle", "permission":"active", "trx_csv":"contract,action,from,to,quantity,bogus,memo\ntoken.seeds,transfer,chuckseattle,coinsacct111,1.2345 SEEDS,,Executator 1\ntoken.seeds,transfer,chuckseattle,coinsacct111,5.4321 SEEDS,,Executator 2"}'
 </code>
