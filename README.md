@@ -53,6 +53,10 @@ returns
 {"esr":"esr://gmN0S9_Eeqy57zv_9xn9eU3hL_bxCbUs-jptJqsXY3-Jtawg04ZLeamPvlzXuOHIAASMIILhlUEog8PpWytygq4yLkg655bYUeIMEl_x1sgoHV0ARDesVlsO0srEwMzO4VzrWGHhNKv_4O9rr-9ULrH-GqlzJ2VhWGvAI5OSm_eAypj9Tsq0WcxpEGb9OmGl-d7DzsIPDt2N2ZLxZeXErJg9M3fLMkKdAgA","qr":"https://127.0.0.1:3000/images/a393f6e2f57d6684b424286eb8ef4104.png"}
 </code>
 
+## Blockchain compatibility
+
+The service points `/maketask` and `/qr` accept a json endpoint property, e.g. `"endpoint":"https://mainnet.telos.net"`, which will be used for rpc access. The endpoint may serve any eosio/Antelope chain.
+
 ## Tools 
 
 ### eosio.to
