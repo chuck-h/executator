@@ -14,6 +14,9 @@ After completing the task, the service publishes a transaction to the chain whic
 A sequence of single-action transactions can be expressed as a csv file (spreadsheet format)
 ![image](https://github.com/chuck-h/executator/assets/2141014/998ad129-df29-4a08-a9ff-72ed8207711c)
 
+A corresponding 4-step execution history (updateauth, script line 1, script line 2, updateauth), last tx at top:
+![image](https://github.com/chuck-h/executator/assets/2141014/663a236f-6a79-4d3b-87f7-3df195c23ca9)
+
 ## Installation
 
 ```
@@ -24,7 +27,7 @@ In a PM2 environment
 ```
 pm2 start index.js
 ```
-Alternatively (?)
+Alternatively
 ```
 npm run start
 ```
@@ -33,7 +36,7 @@ npm run start
 
 ### ```/maketask``` 
 
-send contract/permission and transaction list; returns action to install ephemeral key and start task, e.g.
+send account/permission and transaction list; returns action to install ephemeral key and start task, e.g.
 <code>
 curl -X 'POST'   'http://127.0.0.1:3000/maketask'   -H 'accept: application/json'   -H 'Content-Type: application/json'   -d '{"account":"chuckseattle", "permission":"active", "trx_csv":"contract,action,from,to,quantity,bogus,memo\ntoken.seeds,transfer,chuckseattle,coinsacct111,1.2345 SEEDS,,Executator 1\ntoken.seeds,transfer,chuckseattle,coinsacct111,5.4321 SEEDS,,Executator 2"}'
 </code>
