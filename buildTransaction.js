@@ -78,7 +78,7 @@ async function buildTransaction(actions) {
     return uri
 }
 
-async function sendTransactionWith(actions, keys) {
+async function sendTransactionWith(actions, keys, numRetries = 1) {
     const signatureProvider = new JsSignatureProvider(keys)
     eos = new Api({
         rpc,
@@ -86,13 +86,30 @@ async function sendTransactionWith(actions, keys) {
         textDecoder,
         textEncoder,
     })
-    return await eos.transact(
-        {actions: actions},
-        {
-            blocksBehind: 3,
-            expireSeconds: 30,
+    let result
+    while (numRetries-- >= 0) {
+    try {
+        result = await eos.transact(
+            {actions: actions},
+            {
+                blocksBehind: 3,
+                expireSeconds: 30,
+            }
+        )
+    } catch (err) {
+        const errStr = '' + err;
+        if (errStr.toLowerCase().includes('executing for too long') ||
+            errStr.toLowerCase().includes('exceeded by')) {
+            console.error(errStr, ', retrying...')
+            await sleep(100)
+            continue
+        } else {
+          throw err
         }
-    )
+    }
+    }
+    return result
+        
 }
 
 function getRpc() {

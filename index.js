@@ -47,17 +47,18 @@ fastify.post('/maketask', async (request, reply) => {
       } else {
         parsed.slice(1).forEach( (row) => {
           var trx = {};
-          trx.contract = row[0];
+          trx.account = row[0];
           trx.name = row[1];
+          trx.data = {};
           for (var i = 2; i < row.length; ++i) {
             const field = row[i];
             const header = headers[i];
             if (field.length == 0) {
               continue;
             }
-            trx[header] = field;
+            trx.data[header] = field;
           }
-        trx_list.push(trx);
+        trx_list.push({trx: {actions: [trx]}});
         })
       }
     }  
@@ -66,7 +67,12 @@ fastify.post('/maketask', async (request, reply) => {
     task.public_key = ecc.privateToPublic(task.private_key);
     task.account = request.body.account;
     task.permission = request.body.permission;
-    task.trx_list = request.body.trx_list ?? trx_list;
+    var nude_trx_list = request.body.trx_list ?? trx_list;
+    task.trx_list = nude_trx_list.map( (e) => { return {
+      succeeded: false,
+      failed_attempts: 0,
+      ...e
+    }})
     task_list.push( {
       expires: Date.now() + (request.body.lifetime ?? default_task_lifetime_sec*1000),
       task: task
@@ -130,34 +136,48 @@ async function poll_tasks() {
     for (var task_item of task_list) {
       // TODO check whether task is expired
       var task = task_item.task;
-      if (task_item.expires < Date.now()) {
+      if (task_item.expires < Date.now() && task.status != "complete") {
         console.log("task expired");
         task.status = "processed";
       }
       if ( task.status == "created" && await task_key_present(task) ) {
         task.status = "running";
-        // update task.expires (?)
+        // update task.expires (?)task.trx_list =
         task.retries = 0;
         // TODO loop on task-level retries
         task.failed_trx = 0;
         for (var row of task.trx_list) {
-          console.log(`trx_list row: ${row}`);
-          /*
+          console.log(`trx_list row: ${JSON.stringify(row)}`);
           if ( row.succeeded ) {
             continue;
           }
-          */
           // TODO: handle failure/retry modes
           // TODO build transaction
-          // Sign transaction with task.private_key
-          // Publish transaction
-          // check return value (error?)
-          // update status in trx_list row
-          // update task.failed_trx count
+
+          const actions = row.trx.actions.map( (action) => { return {
+            authorization: [{actor: task.account, permission: task.permission}],
+            ...action
+          }})
+          
+          console.log(`transactions: ${JSON.stringify(actions)}`);
+          // test
+          const esr = await buildTransaction(actions);
+          console.log(`processing trx: ${esr}`);
+          
+          // Sign transaction with task.private_key & publish
+          const result = await sendTransactionWith(actions, [task.private_key]);
+          console.log(JSON.stringify(result));
+          if (result.processed.error != null) {
+            task.failed_trx++;
+            console.log(`while processing trx: ${
+              result.processed.error}`);
+          } else {
+            row.succeeded = true;
+          }
         }
         task.status = "processed"; // after success or retry-timeout
       }
-      if (task.status == "processed") {
+      if (task.status == "processed" ) {
         // build transaction to remove ephemeral key authorization
         const account_data = await rpc.get_account(task.account);
         const account_permission = account_data.permissions.find(row => row.perm_name==task.permission);
@@ -188,7 +208,7 @@ async function poll_tasks() {
 
           // test
           const esr = await buildTransaction(actions);
-          //console.log(esr);
+          console.log(`removing key: ${esr}`);
     
           // sign & publish transaction with task.private_key 
           const result = await sendTransactionWith(actions, [task.private_key]);
