@@ -99,6 +99,7 @@ async function sendTransactionWith(actions, keys, numRetries = 1) {
                 expireSeconds: 30,
             }
         )
+        break;
     } catch (err) {
         const errStr = '' + err;
         if (errStr.toLowerCase().includes('executing for too long') ||
