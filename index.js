@@ -3,6 +3,7 @@ fastify.register(require("fastify-blipp"));
 const path = require('path')
 const {ecc, key_utils, PrivateKey} = require('eosjs-ecc')
 const CSV = require('csv-string')
+const fs = require('node:fs');
 
 const { buildTransaction, setNode, getRpc, sendTransactionWith } = require('./buildTransaction')
 const buildQrCode = require('./buildQrCode')
@@ -23,7 +24,7 @@ fastify.post('/qr', async (request, reply) => {
     }
 })
 
-// We obfuscate task.private_key object property
+// We obfuscate task.private_key
 // 1. at startup, generate obfuscator as 32 random byte Buffer (key_utils.random32ByteBuffer())
 // 2. when task.private_key is generated, get it as random32ByteBuffer
 // 3. xor with obfuscator before saving to task.private_key
@@ -92,6 +93,7 @@ fastify.post('/maketask', async (request, reply) => {
       .toPublic().toString();
     task.account = request.body.account;
     task.permission = request.body.permission;
+    task.outfile = request.body.outfile ?? "executout.txt";
     var nude_trx_list = request.body.trx_list ?? trx_list;
     task.trx_list = nude_trx_list.map( (e) => { return {
       succeeded: false,
@@ -159,9 +161,9 @@ async function poll_tasks() {
     if (task_list.length == 0) { // maybe replace with while (task_list.length != 0) ?
       continue;
     }
+    task_list = task_list.filter((t) => t.task.status != "complete");
     console.log(`polling\n${JSON.stringify(task_list)}\n`);
     for (var task_item of task_list) {
-      // TODO check whether task is expired
       var task = task_item.task;
       if (task_item.expires < Date.now() && task.status != "complete") {
         console.log("task expired");
@@ -169,7 +171,7 @@ async function poll_tasks() {
       }
       if ( task.status == "created" && await task_key_present(task) ) {
         task.status = "running";
-        // update task.expires (?)task.trx_list =
+        // update task.expires (?)
         task.retries = 0;
         // TODO loop on task-level retries
         task.failed_trx = 0;
@@ -186,7 +188,7 @@ async function poll_tasks() {
             ...action
           }})
           
-          console.log(`transactions: ${JSON.stringify(actions)}`);
+          console.log(`transaction: ${JSON.stringify(actions)}`);
           // test
           const esr = await buildTransaction(actions);
           console.log(`processing trx: ${esr}`);
@@ -252,7 +254,12 @@ async function poll_tasks() {
       if (task.status == "pending auth reset" && !(await task_key_present(task))) {
         task.status = "complete";
         // write task to completed file
-        // delete task from task_list
+        delete task.private_key;
+        fs.writeFile(task.outfile, JSON.stringify(task)+"\n", { flag: 'a' }, err => {
+          if (err) {
+            console.error(err);
+          }
+        })
       }
     } //  for task of task_list
   } // while true
