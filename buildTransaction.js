@@ -81,7 +81,7 @@ async function buildTransaction(actions) {
     return uri
 }
 
-async function sendTransactionWith(actions, keys, numRetries = 1) {
+async function sendTransactionWith(actions, keys, numRetries = 1, broadcast = true) {
     const signatureProvider = new JsSignatureProvider(keys)
     eos = new Api({
         rpc,
@@ -89,32 +89,55 @@ async function sendTransactionWith(actions, keys, numRetries = 1) {
         textDecoder,
         textEncoder,
     })
+
     let result
     while (numRetries-- >= 0) {
-    try {
-        result = await eos.transact(
-            {actions: actions},
-            {
-                blocksBehind: 3,
-                expireSeconds: 30,
-            }
-        )
-        break;
-    } catch (err) {
-        const errStr = '' + err;
-        if (errStr.toLowerCase().includes('executing for too long') ||
-            errStr.toLowerCase().includes('exceeded by')) {
-            console.error(errStr, ', retrying...')
-            await sleep(100)
-            continue
+      try {
+        if (broadcast) {
+          result = await eos.transact(
+              {actions: actions},
+              {
+                  blocksBehind: 3,
+                  expireSeconds: 30,
+                  broadcast: broadcast,
+                  requiredKeys: requiredKeys,
+              }
+          )
         } else {
-          throw err
+            const info = await rpc.get_info();
+            transaction = {actions: actions}; 
+            const refBlock = await rpc.get_block(info.head_block_num - 3); // blocksBehind = 3
+            transaction = { ...Serialize.transactionHeader(refBlock, 3540), ...transaction }; // expire 59 mins
+            const abis = await eos.getTransactionAbis(transaction);
+            transaction = { ...transaction, actions: await eos.serializeActions(transaction.actions) };
+            const serializedTransaction = eos.serializeTransaction(transaction);
+            let PushTransactionArgs  = { serializedTransaction, signatures: [] };
+            requiredKeys = await signatureProvider.getAvailableKeys();
+            pushTransactionArgs = await signatureProvider.sign({
+              chainId: info.chain_id,
+              requiredKeys,
+              serializedTransaction,
+              abis,
+            });
+            transaction.signatures = pushTransactionArgs.signatures;
+            result = transaction;
         }
-    }
-    }
-    return result
-        
-}
+        break;
+      } catch (err) {
+          const errStr = '' + err;
+          if (errStr.toLowerCase().includes('executing for too long') ||
+              errStr.toLowerCase().includes('exceeded by')) {
+              console.error(errStr, ', retrying...')
+              await sleep(100)
+              continue
+          } else {
+            result = {processed: {error: err}};
+            break;
+          }
+      }
+    } // while num_retries
+    return result;
+} // function sendTransactionWith
 
 function getRpc() {
   return rpc;
