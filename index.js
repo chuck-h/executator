@@ -30,13 +30,14 @@ fastify.post('/qr', async (request, reply) => {
 // 3. xor with obfuscator before saving to task.private_key
 // 4. when private key is needed to generate public key or sign,
 //     xor with obfuscator to get plaintext, then use PrivateKey(Buffer).toString() for wif
-// TODO: consider refreshing obfuscator any time task_list is empty
+// 5. refresh obfuscator with new random bytes when new task arrives to empty task_list queue
 
 var obfuscator;
 
 
 var task_list = [];
 var restore_actions = [];
+var restore_expires = Date.now();
 const default_task_lifetime_sec = 60;
 
 
@@ -52,12 +53,19 @@ fastify.post('/maketask', async (request, reply) => {
       hashme = request.body.trx_csv;
       trx_list = await list_from_csv(request.body.trx_csv);
     }  else if (request.body.trx_file) {
-      filedata = await fs.readFile(request.body.trx_file, { encoding: 'utf8'});
-      hashme = filedata; // may need raw file data buffer, not utf-8 string?
-      trx_list = await list_from_csv(filedata);
+      try {
+        filedata = await fs.readFile(request.body.trx_file, { encoding: 'utf8'});
+        hashme = filedata; // may need raw file data buffer, not utf-8 string?
+        trx_list = await list_from_csv(filedata);
+      } catch(err) {
+        return {error: err.toString()};
+      }
     }
     var task = {};
     await key_utils.addEntropy(...key_utils.cpuEntropy())
+    if (task_list.length == 0) {
+      obfuscator ^= await key_utils.random32ByteBuffer();
+    }
     task.private_key = (await key_utils.random32ByteBuffer()).map((b,i) => b ^ obfuscator[i]);
     task.public_key = PrivateKey.fromBuffer(task.private_key.map((b,i) => b ^ obfuscator[i]))
       .toPublic().toString();
@@ -112,7 +120,7 @@ fastify.post('/maketask', async (request, reply) => {
       +`\n${esr}\n`);
     const qrPath = await buildQrCode(esr);
     const qr = "http://" + request.hostname + "/" + qrPath;
-    console.log(`${qr}\n`);
+    console.log(`${qr}`);
     
     // build a recovery transaction here and display signed cleos tx
     //  (This will remove the ephemeral auth in case service fails)
@@ -130,10 +138,11 @@ fastify.post('/maketask', async (request, reply) => {
     // Sign restore transaction with task.private_key but don't broadcast
     const signed_restore = await sendTransactionWith(restore_actions,
       [PrivateKey.fromBuffer(task.private_key.map((b,i) => b ^ obfuscator[i])).toString()], 1, false);
-    console.log(`----signed restore tx-----------------------\n\n`
+    console.log(`\n----signed restore tx valid until ${Date(Date.now()+ 59*60*1000)} ----\n\n`
       +`cleos -u https://mainnet.telos.net push transaction -s  '${JSON.stringify(signed_restore)}'\n`
       +`\n--------------------------------------------------\n`);
-
+    restore_expires = Date.now() + 45*60*1000; // 45 minutes in msec
+    
     return actions;
 })
 
@@ -198,7 +207,7 @@ async function poll_tasks() {
       continue;
     }
     task_list = task_list.filter((t) => t.task.status != "complete");
-    console.log(`polling, ${task_list.length} tasks pending\n`);
+    console.log(`polling, ${task_list.length} tasks in queue\n`);
     //console.log(`polling\n${JSON.stringify(task_list)}\n`);
     for (var task_item of task_list) {
       task = task_item.task;
@@ -214,7 +223,8 @@ async function poll_tasks() {
         task.retries = 0;
         // TODO loop on task-level retries
         task.failed_trx = 0;
-        for (var row of task.trx_list) {
+        for (let [index, row] of task.trx_list.entries()) {  //(var row of task.trx_list) {
+          console.log(`---- row ${index+1} of ${task.trx_list.length} (${task.failed_trx} failed) -----`);
           console.log(`trx_list row: ${JSON.stringify(row)}`);
           if ( row.succeeded ) {
             continue;
@@ -229,18 +239,28 @@ async function poll_tasks() {
           console.log(`transaction: ${JSON.stringify(actions)}`);
           // test
           const esr = await buildTransaction(actions);
-          console.log(`processing trx: ${esr}`);
-          
+          console.log(`processing trx: ${esr}\n`);
           // Sign transaction with task.private_key & publish
           const result = await sendTransactionWith(actions,
             [PrivateKey.fromBuffer(task.private_key.map((b,i) => b ^ obfuscator[i])).toString()], 2);
           //console.log(JSON.stringify(result));
           if (result.processed.error != null) {
             task.failed_trx++;
+            row.failed_attempts++;
             console.log(`while processing trx: ${
               result.processed.error}`);
           } else {
             row.succeeded = true;
+            console.log('... succeeded.\n');
+          }
+          // check whether we need to refresh key restoration transaction
+          if (restore_expires < Date.now()) {
+            const signed_restore = await sendTransactionWith(restore_actions,
+              [PrivateKey.fromBuffer(task.private_key.map((b,i) => b ^ obfuscator[i])).toString()], 1, false);
+            console.log(`\n----signed restore tx valid until ${Date(Date.now()+ 59*60*1000)} ----\n\n`
+                +`cleos -u https://mainnet.telos.net push transaction -s  '${JSON.stringify(signed_restore)}'\n`
+                +`\n--------------------------------------------------\n`);
+             restore_expires = Date.now() + 45*60*1000; // 45 minutes in msec         
           }
         }
         task.status = "processed"; // after success or retry-timeout
@@ -259,6 +279,7 @@ async function poll_tasks() {
       }
       if (task.status == "pending auth reset" && !(await task_key_present(task))) {
         task.status = "complete";
+        console.log('task completed');
         // write task to completed file
         delete task.private_key;
         await fs.writeFile(task.outfile, JSON.stringify(task)+"\n", { flag: 'a' }, err => {

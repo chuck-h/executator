@@ -54,31 +54,48 @@ function setNode(node) {
 
 // TODO make a buildActionList which uses the list-of-actions esr form
 //  This will make a non-expiring esr/QR code
+//  TODO: handle errors (e.g. executing too long)
 
 async function buildTransaction(actions) {
     if (typeof(rpc) == 'undefined') {
         return null;
     }
-    const info = await rpc.get_info();
-    const head_block = await rpc.get_block(info.last_irreversible_block_num);
-    const chainId = info.chain_id;
-    // set to an hour from now.
-    const expiration = Serialize.timePointSecToDate(Serialize.dateToTimePointSec(head_block.timestamp) + 3600)
-    const transaction = {
-        expiration,
-        ref_block_num: head_block.block_num & 0xffff, // 
-        ref_block_prefix: head_block.ref_block_prefix,
-        max_net_usage_words: 0,
-        delay_sec: 0,
-        context_free_actions: [],
-        actions: actions,
-        transaction_extensions: [],
-        signatures: [],
-        context_free_data: []
-    };
-    const request = await SigningRequest.create({ transaction, chainId }, opts);
-    const uri = request.encode();
-    return uri
+    let numRetries = 2;
+    while (numRetries-- >= 0) {
+      try {
+        const info = await rpc.get_info();
+        const head_block = await rpc.get_block(info.last_irreversible_block_num);
+        const chainId = info.chain_id;
+        // set to an hour from now.
+        const expiration = Serialize.timePointSecToDate(Serialize.dateToTimePointSec(head_block.timestamp) + 3600)
+        const transaction = {
+          expiration,
+          ref_block_num: head_block.block_num & 0xffff, // 
+          ref_block_prefix: head_block.ref_block_prefix,
+          max_net_usage_words: 0,
+          delay_sec: 0,
+          context_free_actions: [],
+          actions: actions,
+          transaction_extensions: [],
+          signatures: [],
+          context_free_data: []
+        };
+        const request = await SigningRequest.create({ transaction, chainId }, opts);
+        const uri = request.encode();
+        return uri
+        } catch (err) {
+              const errStr = '' + err;
+          if (errStr.toLowerCase().includes('executing for too long') ||
+              errStr.toLowerCase().includes('exceeded by')) {
+              console.error(errStr, ', retrying...')
+              await new Promise(r => setTimeout(r, 100));
+              continue
+          } else {
+            return {processed: {error: err}};
+            break;
+          }
+      }
+    }
 }
 
 async function sendTransactionWith(actions, keys, numRetries = 1, broadcast = true) {
@@ -128,7 +145,7 @@ async function sendTransactionWith(actions, keys, numRetries = 1, broadcast = tr
           if (errStr.toLowerCase().includes('executing for too long') ||
               errStr.toLowerCase().includes('exceeded by')) {
               console.error(errStr, ', retrying...')
-              await sleep(100)
+              await new Promise(r => setTimeout(r, 100));
               continue
           } else {
             result = {processed: {error: err}};
