@@ -62,6 +62,10 @@ The service points `/maketask` and `/qr` accept a json endpoint property, e.g. `
 
 ## Tools 
 
+### exec_wrap
+A cli wrapper that calls the executator service with command-line parameters
+https://github.com/chuck-h/execc
+
 ### eosio.to
 Shows QR codes for ESR encoded requests
 
